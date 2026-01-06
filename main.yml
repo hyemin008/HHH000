@@ -1,0 +1,51 @@
+name: Upload Python Source to S3 (OIDC)
+
+on:
+  push:
+    branches: ["main"]
+    # 파이썬/설정 파일 바뀔 때만 실행하고 싶으면 paths를 쓰세요
+    paths:
+      - "**/*.py"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - "poetry.lock"
+      - ".github/workflows/upload-python-to-s3.yml"
+
+permissions:
+  id-token: write   # OIDC에 필요
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  S3_BUCKET: my-bucket-hmin
+  S3_PREFIX: myapp/source  # S3 폴더(프리픽스)
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ✅ GitHub OIDC -> AWS Role Assume
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::369504341441:role/github-data-hmin
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ✅ 소스 그대로 S3 업로드(동기화)
+      - name: Sync repo to S3 (source upload)
+        run: |
+          aws s3 sync . "s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/" \
+            --delete \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "__pycache__/*" \
+            --exclude ".venv/*" \
+            --exclude "venv/*" \
+            --exclude ".pytest_cache/*" \
+            --exclude ".mypy_cache/*" \
+            --exclude ".idea/*" \
+            --exclude ".vscode/*"
